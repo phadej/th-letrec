@@ -16,6 +16,7 @@ import qualified Data.Map.Lazy as Map
 -- $setup
 -- >>> :set -XTemplateHaskell
 -- >>> import Language.Haskell.TH.Syntax as TH
+-- >>> import Language.Haskell.TH.Lib    as TH
 -- >>> import Language.Haskell.TH.Ppr    as TH
 
 -- | Generate potentially recursive let expression.
@@ -27,7 +28,7 @@ import qualified Data.Map.Lazy as Map
 --
 -- >>> let trueFalse = letrecE (\tag -> "go" ++ show tag) (\rec tag -> rec (not tag) >>= \next -> return [| $(TH.lift tag) : $next |]) ($ True)
 --
--- The generated let-bindings looks like:
+-- The generated let-bindings look like:
 --
 -- >>> TH.ppr <$> trueFalse
 -- let {goFalse_0 = GHC.Types.False GHC.Types.: goTrue_1;
@@ -38,6 +39,29 @@ import qualified Data.Map.Lazy as Map
 --
 -- >>> take 10 $trueFalse
 -- [True,False,True,False,True,False,True,False,True,False]
+--
+-- Another example where dynamic nature is visible is generating
+-- fibonacci numbers:
+--
+-- >>> let fibRec rec tag = case tag of { 0 -> return [| 1 |]; 1 -> return [| 1 |]; _ -> do { minus1 <- rec (tag - 1); minus2 <- rec (tag - 2); return [| $minus1 + $minus2 |] }}
+-- >>> let fib n = letrecE (\tag -> "fib" ++ show tag) fibRec ($ n)
+--
+-- The generated let-bindings look like:
+-- >>> TH.ppr <$> fib 7
+-- let {fib0_0 = 1;
+--      fib1_1 = 1;
+--      fib2_2 = fib1_1 GHC.Num.+ fib0_0;
+--      fib3_3 = fib2_2 GHC.Num.+ fib1_1;
+--      fib4_4 = fib3_3 GHC.Num.+ fib2_2;
+--      fib5_5 = fib4_4 GHC.Num.+ fib3_3;
+--      fib6_6 = fib5_5 GHC.Num.+ fib4_4;
+--      fib7_7 = fib6_6 GHC.Num.+ fib5_5}
+--  in fib7_7
+--
+-- And the result is expected:
+--
+-- >>> $(fib 7)
+-- 21
 --
 letrecE
     :: forall q tag. (Ord tag, Quote q, MonadFix q)
