@@ -1,1 +1,3 @@
 packages: .
+
+packages: https://hackage.haskell.org/package/codet-0.1/candidate/codet-0.1.tar.gz
