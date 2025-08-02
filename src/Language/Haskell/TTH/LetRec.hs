@@ -24,6 +24,10 @@ import qualified Language.Haskell.TH.LetRec as TH.LetRec
 -- >>> import Language.Haskell.TH.Syntax as TH
 -- >>> import Language.Haskell.TH.CodeT  as TH.CodeT
 -- >>> import Language.Haskell.TH.Ppr    as TH
+-- >>> let mangleName :: TH.Name -> TH.Name; mangleName n | n == ''()  = TH.Name (TH.OccName "Unit") TH.NameS; mangleName (TH.Name occ TH.NameG {}) = TH.Name occ TH.NameS; mangleName n = n
+-- >>> import Data.Data (Data, Typeable, cast, gmapT)
+-- >>> mkT :: (Typeable a, Typeable b) => (b -> b) -> a -> a; mkT f x = maybe x (maybe x id . cast . f) (cast x)
+-- >>> let everywhere :: (forall a. Data a => a -> a) -> (forall b. Data b => b -> b); everywhere f = go where go :: forall c. Data c => c -> c; go = f . gmapT go
 --
 -- >>> :{
 -- data NP f xs where
@@ -58,15 +62,14 @@ import qualified Language.Haskell.TH.LetRec as TH.LetRec
 
 -- | Generate potentially recursive let expression.
 --
--- Example of generating a list ofg alternative 'True' and 'False' values.
+-- Example of generating a list of alternating 'True' and 'False' values.
 --
 -- >>> let trueFalse = letrecE (\tag -> "go" ++ show tag) (\rec tag -> rec (not tag) >>= \next -> return [|| $$(TH.liftTyped tag) : $$next ||]) (\rec -> rec True)
 --
 -- The generated let-bindings looks like:
 --
--- >>> TH.ppr <$> TH.unTypeCode trueFalse
--- let {goFalse_0 = GHC.Types.False GHC.Types.: goTrue_1;
---      goTrue_1 = GHC.Types.True GHC.Types.: goFalse_0}
+-- >>> TH.ppr . everywhere (mkT mangleName) <$> TH.unTypeCode trueFalse
+-- let {goFalse_0 = False : goTrue_1; goTrue_1 = True : goFalse_0}
 --  in goTrue_1
 --
 -- And when spliced it produces a list of alternative 'True' and 'False' values:
@@ -93,23 +96,23 @@ letrecE nameOf bindf exprf = unsafeCodeCoerce $ TH.LetRec.letrecE
 -- >>> let fib n = typedLetrecE (\tag -> "fib" ++ show tag) (codeT @Int) fibRec ($ n)
 --
 -- The generated let-bindings look like:
--- >>> TH.ppr <$> unTypeCode (fib 7)
--- let {fib0_0 :: GHC.Types.Int;
+-- >>> TH.ppr . everywhere (mkT mangleName) <$> unTypeCode (fib 7)
+-- let {fib0_0 :: Int;
 --      fib0_0 = 1;
---      fib1_1 :: GHC.Types.Int;
+--      fib1_1 :: Int;
 --      fib1_1 = 1;
---      fib2_2 :: GHC.Types.Int;
---      fib2_2 = fib1_1 GHC.Num.+ fib0_0;
---      fib3_3 :: GHC.Types.Int;
---      fib3_3 = fib2_2 GHC.Num.+ fib1_1;
---      fib4_4 :: GHC.Types.Int;
---      fib4_4 = fib3_3 GHC.Num.+ fib2_2;
---      fib5_5 :: GHC.Types.Int;
---      fib5_5 = fib4_4 GHC.Num.+ fib3_3;
---      fib6_6 :: GHC.Types.Int;
---      fib6_6 = fib5_5 GHC.Num.+ fib4_4;
---      fib7_7 :: GHC.Types.Int;
---      fib7_7 = fib6_6 GHC.Num.+ fib5_5}
+--      fib2_2 :: Int;
+--      fib2_2 = fib1_1 + fib0_0;
+--      fib3_3 :: Int;
+--      fib3_3 = fib2_2 + fib1_1;
+--      fib4_4 :: Int;
+--      fib4_4 = fib3_3 + fib2_2;
+--      fib5_5 :: Int;
+--      fib5_5 = fib4_4 + fib3_3;
+--      fib6_6 :: Int;
+--      fib6_6 = fib5_5 + fib4_4;
+--      fib7_7 :: Int;
+--      fib7_7 = fib6_6 + fib5_5}
 --  in fib7_7
 --
 -- >>> $$(fib 7)
@@ -154,8 +157,8 @@ typedLetrecE nameOf typeOf bindf exprf = unsafeCodeCoerce $ TH.LetRec.typedLetre
 --
 -- We can apply @gen@ to @values@ to get a code expression:
 --
--- >>> TH.ppr <$> TH.unTypeCode (gen values)
--- 'x' GHC.Types.: ('x' GHC.Types.: GHC.Show.show GHC.Types.True)
+-- >>> TH.ppr . everywhere (mkT mangleName) <$> TH.unTypeCode (gen values)
+-- 'x' : ('x' : show True)
 --
 -- But if @values@ where big, we would potentially duplicate the computations.
 -- Better to first let-bind them.
@@ -197,9 +200,9 @@ typedLetrecE nameOf typeOf bindf exprf = unsafeCodeCoerce $ TH.LetRec.typedLetre
 --
 -- and use it to bind 'values' before using them in 'gen':
 --
--- >>> TH.ppr <$> TH.unTypeCode (letNP values gen)
--- let {x_0 = GHC.Types.True; x_1 = 'x'}
---  in x_1 GHC.Types.: (x_1 GHC.Types.: GHC.Show.show x_0)
+-- >>> TH.ppr . everywhere (mkT mangleName) <$> TH.unTypeCode (letNP values gen)
+-- let {x_0 = True; x_1 = 'x'}
+--  in x_1 : (x_1 : show x_0)
 --
 -- The result of evaluating either expression is the same:
 --
@@ -252,12 +255,9 @@ letrecH nameOf bindf exprf = unsafeCodeCoerce $ TH.LetRec.letrecE
 --
 -- The generated let expression will have type annotations:
 --
--- >>> TH.ppr <$> TH.unTypeCode (typedLetNP types values gen)
--- let {x_0 :: GHC.Types.Bool;
---      x_0 = GHC.Types.True;
---      x_1 :: GHC.Types.Char;
---      x_1 = 'x'}
---  in x_1 GHC.Types.: (x_1 GHC.Types.: GHC.Show.show x_0)
+-- >>> TH.ppr . everywhere (mkT mangleName) <$> TH.unTypeCode (typedLetNP types values gen)
+-- let {x_0 :: Bool; x_0 = True; x_1 :: Char; x_1 = 'x'}
+--  in x_1 : (x_1 : show x_0)
 --
 -- The result of evaluating either expression is the same:
 --
