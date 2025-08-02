@@ -15,10 +15,14 @@ import Language.Haskell.TH.Syntax     (Exp, Name, Quote (newName), Type)
 import qualified Data.Map.Lazy as Map
 
 -- $setup
--- >>> :set -XTemplateHaskell
+-- >>> :set -XTemplateHaskell -XRankNTypes -XScopedTypeVariables
 -- >>> import Language.Haskell.TH.Syntax as TH
 -- >>> import Language.Haskell.TH.Lib    as TH
 -- >>> import Language.Haskell.TH.Ppr    as TH
+-- >>> let mangleName :: TH.Name -> TH.Name; mangleName n | n == ''()  = TH.Name (TH.OccName "Unit") TH.NameS; mangleName (TH.Name occ TH.NameG {}) = TH.Name occ TH.NameS; mangleName n = n
+-- >>> import Data.Data (Data, Typeable, cast, gmapT)
+-- >>> mkT :: (Typeable a, Typeable b) => (b -> b) -> a -> a; mkT f x = maybe x (maybe x id . cast . f) (cast x)
+-- >>> let everywhere :: (forall a. Data a => a -> a) -> (forall b. Data b => b -> b); everywhere f = go where go :: forall c. Data c => c -> c; go = f . gmapT go
 
 -- | Generate potentially recursive let expression.
 --
@@ -31,9 +35,8 @@ import qualified Data.Map.Lazy as Map
 --
 -- The generated let-bindings look like:
 --
--- >>> TH.ppr <$> trueFalse
--- let {goFalse_0 = GHC.Types.False GHC.Types.: goTrue_1;
---      goTrue_1 = GHC.Types.True GHC.Types.: goFalse_0}
+-- >>> TH.ppr . everywhere (mkT mangleName) <$> trueFalse
+-- let {goFalse_0 = False : goTrue_1; goTrue_1 = True : goFalse_0}
 --  in goTrue_1
 --
 -- And when spliced it produces a list of alternative 'True' and 'False' values:
@@ -48,15 +51,15 @@ import qualified Data.Map.Lazy as Map
 -- >>> let fib n = letrecE (\tag -> "fib" ++ show tag) fibRec ($ n)
 --
 -- The generated let-bindings look like:
--- >>> TH.ppr <$> fib 7
+-- >>> TH.ppr . everywhere (mkT mangleName) <$> fib 7
 -- let {fib0_0 = 1;
 --      fib1_1 = 1;
---      fib2_2 = fib1_1 GHC.Num.+ fib0_0;
---      fib3_3 = fib2_2 GHC.Num.+ fib1_1;
---      fib4_4 = fib3_3 GHC.Num.+ fib2_2;
---      fib5_5 = fib4_4 GHC.Num.+ fib3_3;
---      fib6_6 = fib5_5 GHC.Num.+ fib4_4;
---      fib7_7 = fib6_6 GHC.Num.+ fib5_5}
+--      fib2_2 = fib1_1 + fib0_0;
+--      fib3_3 = fib2_2 + fib1_1;
+--      fib4_4 = fib3_3 + fib2_2;
+--      fib5_5 = fib4_4 + fib3_3;
+--      fib6_6 = fib5_5 + fib4_4;
+--      fib7_7 = fib6_6 + fib5_5}
 --  in fib7_7
 --
 -- And the result is expected:
@@ -79,23 +82,23 @@ letrecE nameOf = typedLetrecE nameOf (const Nothing)
 -- >>> let fib n = typedLetrecE (\tag -> "fib" ++ show tag) (\_ -> Just [t| Int |]) fibRec ($ n)
 --
 -- The generated let-bindings look like:
--- >>> TH.ppr <$> fib 7
--- let {fib0_0 :: GHC.Types.Int;
+-- >>> TH.ppr . everywhere (mkT mangleName) <$> fib 7
+-- let {fib0_0 :: Int;
 --      fib0_0 = 1;
---      fib1_1 :: GHC.Types.Int;
+--      fib1_1 :: Int;
 --      fib1_1 = 1;
---      fib2_2 :: GHC.Types.Int;
---      fib2_2 = fib1_1 GHC.Num.+ fib0_0;
---      fib3_3 :: GHC.Types.Int;
---      fib3_3 = fib2_2 GHC.Num.+ fib1_1;
---      fib4_4 :: GHC.Types.Int;
---      fib4_4 = fib3_3 GHC.Num.+ fib2_2;
---      fib5_5 :: GHC.Types.Int;
---      fib5_5 = fib4_4 GHC.Num.+ fib3_3;
---      fib6_6 :: GHC.Types.Int;
---      fib6_6 = fib5_5 GHC.Num.+ fib4_4;
---      fib7_7 :: GHC.Types.Int;
---      fib7_7 = fib6_6 GHC.Num.+ fib5_5}
+--      fib2_2 :: Int;
+--      fib2_2 = fib1_1 + fib0_0;
+--      fib3_3 :: Int;
+--      fib3_3 = fib2_2 + fib1_1;
+--      fib4_4 :: Int;
+--      fib4_4 = fib3_3 + fib2_2;
+--      fib5_5 :: Int;
+--      fib5_5 = fib4_4 + fib3_3;
+--      fib6_6 :: Int;
+--      fib6_6 = fib5_5 + fib4_4;
+--      fib7_7 :: Int;
+--      fib7_7 = fib6_6 + fib5_5}
 --  in fib7_7
 --
 -- >>> $(fib 7)
