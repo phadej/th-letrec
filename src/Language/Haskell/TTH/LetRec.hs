@@ -19,6 +19,8 @@ import qualified Language.Haskell.TH.LetRec as TH.LetRec
 -- $setup
 -- >>> :set -XGADTs -XTypeOperators -XDataKinds -XPolyKinds -XRankNTypes -XTypeApplications
 -- >>> import Control.Monad.Fix (MonadFix)
+-- >>> import Data.EqP
+-- >>> import Data.OrdP
 -- >>> import Data.GADT.Compare
 -- >>> import Data.Type.Equality
 -- >>> import Language.Haskell.TH.Syntax as TH
@@ -41,7 +43,11 @@ import qualified Language.Haskell.TH.LetRec as TH.LetRec
 -- data Idx xs x where
 --    IZ :: Idx (x ': xs) x
 --    IS :: Idx xs x -> Idx (y ': xs) x
+-- instance Eq (Idx xs x) where (==) = defaultEq
+-- instance EqP (Idx xs) where eqp = defaultEq
 -- instance GEq (Idx xs) where geq = defaultGeq
+-- instance Ord (Idx xs x) where compare = defaultCompare
+-- instance OrdP (Idx xs) where comparep = defaultCompare
 -- instance GCompare (Idx xs) where
 --     gcompare IZ     IZ     = GEQ
 --     gcompare (IS x) (IS y) = gcompare x y
@@ -169,7 +175,11 @@ typedLetrecE nameOf typeOf bindf exprf = unsafeCodeCoerce $ TH.LetRec.typedLetre
 -- data Idx xs x where
 --    IZ :: Idx (x ': xs) x
 --    IS :: Idx xs x -> Idx (y ': xs) x
+-- instance Eq (Idx xs x) where (==) = defaultEq
+-- instance EqP (Idx xs) where eqp = defaultEq
 -- instance GEq (Idx xs) where geq = defaultGeq
+-- instance Ord (Idx xs x) where compare = defaultCompare
+-- instance OrdP (Idx xs) where comparep = defaultCompare
 -- instance GCompare (Idx xs) where
 --     gcompare IZ     IZ     = GEQ
 --     gcompare (IS x) (IS y) = gcompare x y
